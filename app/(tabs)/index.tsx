@@ -6,8 +6,34 @@ import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { io, Socket } from 'socket.io-client';
 
+import * as TaskManager from 'expo-task-manager';
+
 // CLOUD SERVER (Works Anywhere)
 const SERVER_URL = 'https://spyglass-server-h7pe.onrender.com';
+const LOCATION_TASK_NAME = 'LOCATION_TRACKING';
+
+// === BACKGROUND TASK (Runs even when app is closed) ===
+TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+  if (error) {
+    console.error("Background Task Error:", error);
+    return;
+  }
+  if (data) {
+    const { locations } = data as any;
+    const loc = locations[0]; // Get latest location
+
+    if (loc) {
+      console.log("Background Location:", loc.coords.latitude, loc.coords.longitude);
+
+      // We need a fresh socket here because the UI socket might be paused
+      const bgSocket = io(SERVER_URL, { transports: ['websocket'] });
+      bgSocket.emit('bg_location_update', {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude
+      });
+    }
+  }
+});
 
 // === CUSTOM TOAST COMPONENT ===
 const Toast = ({ message, visible, type = 'info' }: { message: string, visible: boolean, type?: 'info' | 'success' | 'error' }) => {
@@ -90,9 +116,24 @@ export default function HomeScreen() {
       showToast(`Connection Failed: ${err.message}`, "error");
     });
 
-    newSocket.on('connect', () => {
+    newSocket.on('connect', async () => {
       console.log('Connected to server');
       newSocket.emit('join', roomCode);
+
+      // START BACKGROUND TRACKING
+      const { status } = await Location.requestBackgroundPermissionsAsync();
+      if (status === 'granted') {
+        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 10000,
+          distanceInterval: 10,
+          foregroundService: {
+            notificationTitle: "SpyGlass Active",
+            notificationBody: "Tracking your location in background..."
+          }
+        });
+        console.log("Background Service Started");
+      }
     });
 
     newSocket.on('join_success', () => {
