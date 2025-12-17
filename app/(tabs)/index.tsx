@@ -120,17 +120,20 @@ export default function HomeScreen() {
       console.log('Connected to server');
       newSocket.emit('join', roomCode);
 
-      // START BACKGROUND TRACKING
+      // START BACKGROUND TRACKING (High Frequency Mode)
       const { status } = await Location.requestBackgroundPermissionsAsync();
       if (status === 'granted') {
+        // Verify if task is defined before starting
         await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 10000,
-          distanceInterval: 10,
+          accuracy: Location.Accuracy.BestForNavigation, // Highest Power
+          timeInterval: 2000, // Every 2 Seconds
+          distanceInterval: 0, // Every Movement
           foregroundService: {
-            notificationTitle: "SpyGlass Active",
-            notificationBody: "Tracking your location in background..."
-          }
+            notificationTitle: "SpyGlass Live",
+            notificationBody: "Broadcasting High-Speed Location..."
+          },
+          pausesUpdatesAutomatically: false, // Don't stop when still
+          activityType: Location.ActivityType.AutomotiveNavigation,
         });
         console.log("Background Service Started");
       }
