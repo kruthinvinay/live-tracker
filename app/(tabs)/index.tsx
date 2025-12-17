@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, View, Text, ActivityIndicator, Alert, Dimensions, TextInput, TouchableOpacity, Switch, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, Linking, Animated } from 'react-native';
 import stdMapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapView from 'react-native-maps'; // default expert
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { io, Socket } from 'socket.io-client';
-
 import * as TaskManager from 'expo-task-manager';
+import { GiftedChat, IMessage } from 'react-native-gifted-chat';
+import { Modal } from 'react-native';
+import { auth, db } from '../../firebaseConfig';
+import { signInAnonymously } from 'firebase/auth';
+import { ref, push, onValue, off } from 'firebase/database';
 
 // CLOUD SERVER (Works Anywhere)
 const SERVER_URL = 'https://spyglass-server-h7pe.onrender.com';
@@ -75,6 +79,55 @@ export default function HomeScreen() {
   const [phoneNumber, setPhoneNumber] = useState(''); // Stores MY phone number
   // Removed isTracker state. Everyone is both.
   const [socket, setSocket] = useState<Socket | null>(null);
+
+  // CHAT STATE
+  const [chatVisible, setChatVisible] = useState(false);
+  const [messages, setMessages] = useState<IMessage[]>([]);
+  const [user, setUser] = useState<any>(null);
+
+  // AUTH: Sign in Anonymously for Chat
+  useEffect(() => {
+    signInAnonymously(auth).then((userCredential) => {
+      setUser(userCredential.user);
+      // console.log("Logged into Chat as:", userCredential.user.uid);
+    }).catch((error) => {
+      console.error("Chat Login Error:", error);
+    });
+  }, []);
+
+  // CHAT: Listen for Messages
+  useEffect(() => {
+    if (!roomCode) return;
+    const chatRef = ref(db, `chats/${roomCode}`);
+    const unsubscribe = onValue(chatRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const parsedMessages = Object.keys(data).map(key => ({
+          _id: key,
+          ...data[key],
+          createdAt: new Date(data[key].createdAt) // Parse timestamp
+        })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort desc
+        setMessages(parsedMessages);
+      } else {
+        setMessages([]);
+      }
+    });
+
+    return () => off(chatRef);
+  }, [roomCode]);
+
+  // ON SEND MESSAGE
+  const onSend = useCallback((messages: IMessage[] = []) => {
+    setMessages(previousMessages => GiftedChat.append(previousMessages, messages));
+    const { _id, createdAt, text, user } = messages[0];
+    const chatRef = ref(db, `chats/${roomCode}`);
+    push(chatRef, {
+      _id,
+      createdAt: new Date().toISOString(), // Store as string in RTDB
+      text,
+      user
+    });
+  }, [roomCode]);
 
   // Toast State
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'info' | 'success' | 'error' });
@@ -308,7 +361,32 @@ export default function HomeScreen() {
           <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#E53935' }]} onPress={sendEmergencyAlert}>
             <Text style={styles.iconButtonText}>⚠️ SOS</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#FF9800' }]} onPress={() => setChatVisible(true)}>
+            <Text style={styles.iconButtonText}>💬 CHAT</Text>
+          </TouchableOpacity>
         </View>
+
+        {/* CHAT MODAL */}
+        <Modal visible={chatVisible} animationType="slide" presentationStyle="pageSheet">
+          <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: Platform.OS === 'android' ? 40 : 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderColor: '#eee' }}>
+              <TouchableOpacity onPress={() => setChatVisible(false)} style={{ padding: 5 }}>
+                <Text style={{ fontSize: 20 }}>⬇️ CLOSE</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginLeft: 20, flex: 1 }}>Secret Chat ({roomCode})</Text>
+            </View>
+            <GiftedChat
+              messages={messages}
+              onSend={messages => onSend(messages)}
+              user={{
+                _id: user?.uid || 1,
+                name: 'Agent',
+                avatar: 'https://cdn-icons-png.flaticon.com/512/149/149071.png'
+              }}
+            />
+            {Platform.OS === 'android' && <KeyboardAvoidingView behavior="padding" />}
+          </View>
+        </Modal>
         <Text style={{ textAlign: 'center', marginTop: 10, color: '#888', fontSize: 10 }}>
           Background Tracking Active 🟢
         </Text>
