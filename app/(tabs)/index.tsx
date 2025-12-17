@@ -73,7 +73,7 @@ export default function HomeScreen() {
   const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(''); // Stores MY phone number
-  const [isTracker, setIsTracker] = useState(true); // true = I am Tracker, false = I am Target
+  // Removed isTracker state. Everyone is both.
   const [socket, setSocket] = useState<Socket | null>(null);
 
   // Toast State
@@ -257,15 +257,6 @@ export default function HomeScreen() {
             />
           </View>
 
-          <View style={styles.roleContainer}>
-            <Text style={styles.roleText}>{isTracker ? 'I am the TRACKER 🕵️‍♂️' : 'I am the TARGET 🎯'}</Text>
-            <Switch
-              value={isTracker}
-              onValueChange={setIsTracker}
-              trackColor={{ false: "#767577", true: "#81b0ff" }}
-            />
-          </View>
-
           <TouchableOpacity style={styles.connectButton} onPress={connectToServer}>
             <Text style={styles.connectButtonText}>Connect to Satellite</Text>
           </TouchableOpacity>
@@ -303,24 +294,18 @@ export default function HomeScreen() {
 
       <View style={styles.controlPanel}>
         <Text style={styles.roomBadge}>SECURE CHANNEL: {roomCode}</Text>
-        {isTracker ? (
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.iconButton} onPress={requestFriendLocation}>
-              <Text style={styles.iconButtonText}>📡 PING</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#E53935' }]} onPress={sendEmergencyAlert}>
-              <Text style={styles.iconButtonText}>⚠️ SOS</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.targetContainer}>
-            <View style={styles.pulsingDot} />
-            <Text style={{ color: '#4A5568', fontWeight: '600' }}>Live: Listening for Pings...</Text>
-            <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#E53935', marginTop: 10, width: '100%' }]} onPress={sendEmergencyAlert}>
-              <Text style={styles.iconButtonText}>⚠️ SEND SOS</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.iconButton} onPress={requestFriendLocation}>
+            <Text style={styles.iconButtonText}>📡 PING</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#E53935' }]} onPress={sendEmergencyAlert}>
+            <Text style={styles.iconButtonText}>⚠️ SOS</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={{ textAlign: 'center', marginTop: 10, color: '#888', fontSize: 10 }}>
+          Background Tracking Active 🟢
+        </Text>
       </View>
     </View>
   );
