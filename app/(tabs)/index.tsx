@@ -285,13 +285,16 @@ export default function HomeScreen() {
         }}
         showsUserLocation={true}
       >
-        {/* Friend Marker (Only updates when signal received) */}
+        {/* Friend Marker (Custom Avatar) */}
         {friendLocation && (
-          <Marker
-            coordinate={friendLocation}
-            title="Target"
-            pinColor="red"
-          />
+          <Marker coordinate={friendLocation} title="Partner">
+            <View style={styles.markerContainer}>
+              <View style={styles.markerCircle}>
+                <Text style={styles.markerText}>👤</Text>
+              </View>
+              <View style={styles.markerArrow} />
+            </View>
+          </Marker>
         )}
       </MapView>
 
@@ -529,5 +532,42 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 10,
     elevation: 5
+  },
+  // MARKER STYLES
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#48BB78', // WhatsApp Green
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  markerText: {
+    fontSize: 20,
+  },
+  markerArrow: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#48BB78',
+    transform: [{ rotate: '180deg' }],
+    marginTop: -2,
   }
 });
