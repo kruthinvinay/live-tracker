@@ -6,8 +6,8 @@ import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { io, Socket } from 'socket.io-client';
 
-// CHANGE THIS TO YOUR PC LOCAL IP
-const SERVER_URL = 'http://192.168.0.131:3000';
+// CLOUD SERVER (Works Anywhere)
+const SERVER_URL = 'https://spyglass-server-h7pe.onrender.com';
 
 // === CUSTOM TOAST COMPONENT ===
 const Toast = ({ message, visible, type = 'info' }: { message: string, visible: boolean, type?: 'info' | 'success' | 'error' }) => {
@@ -77,8 +77,18 @@ export default function HomeScreen() {
   const connectToServer = () => {
     if (!roomCode) return showToast("Please Enter Room Code", "error");
 
-    const newSocket = io(SERVER_URL);
+    showToast("Connecting to Satellite...", "info");
+
+    const newSocket = io(SERVER_URL, {
+      transports: ['websocket'], // Force WebSocket (better for Android)
+      reconnection: true,
+    });
     setSocket(newSocket);
+
+    newSocket.on('connect_error', (err) => {
+      console.log("Connection Error:", err.message);
+      showToast(`Connection Failed: ${err.message}`, "error");
+    });
 
     newSocket.on('connect', () => {
       console.log('Connected to server');
