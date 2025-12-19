@@ -4,7 +4,7 @@ import { off, onValue, push, ref } from 'firebase/database';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
-import { auth, db } from '../../firebaseConfig';
+import { auth, db } from '../firebaseConfig';
 
 interface ChatModalProps {
     visible: boolean;
