@@ -47,14 +47,14 @@ io.on('connection', (socket) => {
 
     // 3. The Target sends their location
     socket.on('send_location', ({ roomCode, location }) => {
-        console.log(`Location received in ${roomCode}`);
+        console.log(`Location received in ${roomCode} `);
         // Forward to the Tracker
         socket.to(roomCode).emit('update_map', location);
     });
 
     // 4. Emergency / Call Me Alert
     socket.on('emergency_alert', ({ roomCode, location, phoneNumber }) => {
-        console.log(`EMERGENCY ALERT in ${roomCode}`);
+        console.log(`EMERGENCY ALERT in ${roomCode} `);
         // Broadcast to everyone (except sender)
         socket.to(roomCode).emit('receive_alert', { location, phoneNumber });
     });
@@ -71,6 +71,8 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`SERVER RUNNING on *:${PORT}`);
+    console.log(`SERVER RUNNING on *:${PORT} `);
     console.log('Your Switchboard is ready.');
 });
+
+// RESTART TRIGGER: V6.1 (Cleaning Ghosts)

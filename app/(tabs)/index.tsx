@@ -1,46 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, View, Text, ActivityIndicator, Alert, Dimensions, TextInput, TouchableOpacity, Switch, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, Linking, Animated } from 'react-native';
-import stdMapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import MapView from 'react-native-maps'; // default expert
+
+// @ts-nocheck
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
-import { io, Socket } from 'socket.io-client';
-import * as TaskManager from 'expo-task-manager';
-import { GiftedChat, IMessage } from 'react-native-gifted-chat';
-import { Modal } from 'react-native';
-import { auth, db } from '../../firebaseConfig';
-import { signInAnonymously } from 'firebase/auth';
-import { ref, push, onValue, off } from 'firebase/database';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
-// CLOUD SERVER (Works Anywhere)
-const SERVER_URL = 'https://spyglass-server-h7pe.onrender.com';
-const LOCATION_TASK_NAME = 'LOCATION_TRACKING';
-
-// === BACKGROUND TASK (Runs even when app is closed) ===
-TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
-  if (error) {
-    console.error("Background Task Error:", error);
-    return;
-  }
-  if (data) {
-    const { locations } = data as any;
-    const loc = locations[0]; // Get latest location
-
-    if (loc) {
-      console.log("Background Location:", loc.coords.latitude, loc.coords.longitude);
-
-      // We need a fresh socket here because the UI socket might be paused
-      const bgSocket = io(SERVER_URL, { transports: ['websocket'] });
-      bgSocket.emit('bg_location_update', {
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude
-      });
-    }
-  }
-});
+import { ChatModal } from '../../components/ChatModal';
+import { ControlDock } from '../../components/ControlDock';
+import { ToastType, useTrackerSocket } from '../../hooks/useTrackerSocket';
 
 // === CUSTOM TOAST COMPONENT ===
-const Toast = ({ message, visible, type = 'info' }: { message: string, visible: boolean, type?: 'info' | 'success' | 'error' }) => {
+const Toast = ({ message, visible, type = 'info' }: { message: string, visible: boolean, type?: ToastType }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -62,7 +33,7 @@ const Toast = ({ message, visible, type = 'info' }: { message: string, visible: 
   };
 
   return (
-    <Animated.View style={[styles.toastContainer, { opacity: fadeAnim, backgroundColor: bgColors[type] }]}>
+    <Animated.View style={[styles.toastContainer, { opacity: fadeAnim, backgroundColor: bgColors[type as keyof typeof bgColors] }]}>
       <Text style={styles.toastText}>{message}</Text>
     </Animated.View>
   );
@@ -70,76 +41,37 @@ const Toast = ({ message, visible, type = 'info' }: { message: string, visible: 
 
 export default function HomeScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [friendLocation, setFriendLocation] = useState<{ latitude: number, longitude: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Connection State
-  const [isConnected, setIsConnected] = useState(false);
   const [roomCode, setRoomCode] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState(''); // Stores MY phone number
-  // Removed isTracker state. Everyone is both.
-  const [socket, setSocket] = useState<Socket | null>(null);
-
-  // CHAT STATE
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [chatVisible, setChatVisible] = useState(false);
-  const [messages, setMessages] = useState<IMessage[]>([]);
-  const [user, setUser] = useState<any>(null);
-
-  // AUTH: Sign in Anonymously for Chat
-  useEffect(() => {
-    signInAnonymously(auth).then((userCredential) => {
-      setUser(userCredential.user);
-      // console.log("Logged into Chat as:", userCredential.user.uid);
-    }).catch((error) => {
-      console.error("Chat Login Error:", error);
-    });
-  }, []);
-
-  // CHAT: Listen for Messages
-  useEffect(() => {
-    if (!roomCode) return;
-    const chatRef = ref(db, `chats/${roomCode}`);
-    const unsubscribe = onValue(chatRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const parsedMessages = Object.keys(data).map(key => ({
-          _id: key,
-          ...data[key],
-          createdAt: new Date(data[key].createdAt) // Parse timestamp
-        })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort desc
-        setMessages(parsedMessages);
-      } else {
-        setMessages([]);
-      }
-    });
-
-    return () => off(chatRef);
-  }, [roomCode]);
-
-  // ON SEND MESSAGE
-  const onSend = useCallback((messages: IMessage[] = []) => {
-    setMessages(previousMessages => GiftedChat.append(previousMessages, messages));
-    const { _id, createdAt, text, user } = messages[0];
-    const chatRef = ref(db, `chats/${roomCode}`);
-    push(chatRef, {
-      _id,
-      createdAt: new Date().toISOString(), // Store as string in RTDB
-      text,
-      user
-    });
-  }, [roomCode]);
-
-  // Toast State
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as 'info' | 'success' | 'error' });
-
   const mapRef = useRef<MapView>(null);
 
-  const showToast = (msg: string, type: 'info' | 'success' | 'error' = 'info') => {
+  // Toast State
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as ToastType });
+  const showToast = (msg: string, type: ToastType = 'info') => {
     setToast({ visible: true, message: msg, type });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
   };
 
-  // 1. Initial Location (Just to center map)
+  // HOOK: Tracker Socket Logic
+  const { isConnected, friendLocation, connect, requestFriendLocation, sendEmergencyAlert } = useTrackerSocket({
+    onToast: showToast
+  });
+
+  // Effect: Animate Map when Friend Moves
+  useEffect(() => {
+    if (friendLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: friendLocation.latitude,
+        longitude: friendLocation.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 1000);
+    }
+  }, [friendLocation]);
+
+  // Initial Location
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -152,134 +84,8 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // 2. Connect to Server
-  const connectToServer = () => {
-    if (!roomCode) return showToast("Please Enter Room Code", "error");
-
-    showToast("Connecting to Satellite...", "info");
-
-    const newSocket = io(SERVER_URL, {
-      transports: ['websocket'], // Force WebSocket (better for Android)
-      reconnection: true,
-    });
-    setSocket(newSocket);
-
-    newSocket.on('connect_error', (err) => {
-      console.log("Connection Error:", err.message);
-      showToast(`Connection Failed: ${err.message}`, "error");
-    });
-
-    newSocket.on('connect', async () => {
-      console.log('Connected to server');
-      newSocket.emit('join', roomCode);
-
-      // START BACKGROUND TRACKING (High Frequency Mode)
-      const { status } = await Location.requestBackgroundPermissionsAsync();
-      if (status === 'granted') {
-        // Verify if task is defined before starting
-        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-          accuracy: Location.Accuracy.BestForNavigation, // Highest Power
-          timeInterval: 2000, // Every 2 Seconds
-          distanceInterval: 0, // Every Movement
-          foregroundService: {
-            notificationTitle: "SpyGlass Live",
-            notificationBody: "Broadcasting High-Speed Location..."
-          },
-          pausesUpdatesAutomatically: false, // Don't stop when still
-          activityType: Location.ActivityType.AutomotiveNavigation,
-        });
-        console.log("Background Service Started");
-      }
-    });
-
-    newSocket.on('join_success', () => {
-      setIsConnected(true);
-    });
-
-    newSocket.on('error', (msg: string) => {
-      showToast(msg, "error");
-      newSocket.disconnect();
-      setIsConnected(false); // Kick back to login
-    });
-
-    newSocket.on('partner_connected', () => {
-      setIsConnected(true); // CONFIRM connection only when joined? Or keep current logic
-      showToast("Partner Connected! 🟢", "success");
-    });
-
-    // LISTENER: If I am the tracker, update map when friend sends loc
-    newSocket.on('update_map', (coords) => {
-      console.log('Friend moved:', coords);
-      setFriendLocation(coords);
-      showToast("Target Moved! Updating Map...", "info");
-      // Animate map to friend
-      mapRef.current?.animateToRegion({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 1000);
-    });
-
-    // LISTENER: If I am the target, wake up!
-    newSocket.on('wake_up_and_send_location', async () => {
-      console.log('WAKE UP RECEIVED! Sending location...');
-      showToast("Tracker pinged you! Sending location...", "info");
-      // Fetch fresh location
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      // Send back
-      newSocket.emit('send_location', {
-        roomCode,
-        location: {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude
-        }
-      });
-    });
-
-    // LISTENER: Emergency Alert Received!
-    newSocket.on('receive_alert', ({ location, phoneNumber: friendsPhone }) => {
-      Alert.alert(
-        "🚨 EMERGENCY 🚨",
-        `Friend needs help!\nLat: ${location.latitude}\nLng: ${location.longitude}`,
-        [
-          { text: "Call Now 📞", onPress: () => Linking.openURL(`tel:${friendsPhone}`) },
-          { text: "Cancel", style: "cancel" }
-        ]
-      );
-      // Also update map to show where they are
-      setFriendLocation(location);
-      mapRef.current?.animateToRegion({
-        latitude: location.latitude,
-        longitude: location.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 1000);
-    });
-  };
-
-  // 3. (Tracker Only) Request Location
-  const requestFriendLocation = () => {
-    socket?.emit('request_location', roomCode);
-    showToast("📡  Ping Sent! Waiting for response...", "success");
-  };
-
-  // 4. (Target Only) Stop Tracking (Manual)
-  // const stopSharing = () => {
-  //   socket?.emit('stop_tracking', roomCode);
-  //   setIsConnected(false);
-  //   setSocket(null);
-  // }
-
-  const sendEmergencyAlert = async () => {
-    if (!location) return showToast("Wait for GPS lock...", "error");
-
-    socket?.emit('emergency_alert', {
-      roomCode,
-      location: { latitude: location.coords.latitude, longitude: location.coords.longitude },
-      phoneNumber // Send my number so they can call me
-    });
-    showToast("🚨 SOS Distress Signal Sent!", "error");
+  const handleConnect = () => {
+    connect(roomCode);
   };
 
   // RENDER: Login Screen
@@ -313,7 +119,7 @@ export default function HomeScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.connectButton} onPress={connectToServer}>
+          <TouchableOpacity style={styles.connectButton} onPress={handleConnect}>
             <Text style={styles.connectButtonText}>Connect to Satellite</Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>
@@ -326,6 +132,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <Toast message={toast.message} visible={toast.visible} type={toast.type} />
       <StatusBar style="dark" backgroundColor="transparent" translucent />
+
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
@@ -338,7 +145,6 @@ export default function HomeScreen() {
         }}
         showsUserLocation={true}
       >
-        {/* Friend Marker (Custom Avatar) */}
         {friendLocation && (
           <Marker coordinate={friendLocation} title="Partner">
             <View style={styles.markerContainer}>
@@ -351,46 +157,18 @@ export default function HomeScreen() {
         )}
       </MapView>
 
-      <View style={styles.controlPanel}>
-        <Text style={styles.roomBadge}>SECURE CHANNEL: {roomCode}</Text>
+      <ControlDock
+        roomCode={roomCode}
+        onPing={() => requestFriendLocation(roomCode)}
+        onSos={() => sendEmergencyAlert(roomCode, phoneNumber)}
+        onChat={() => setChatVisible(true)}
+      />
 
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.iconButton} onPress={requestFriendLocation}>
-            <Text style={styles.iconButtonText}>📡 PING</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#E53935' }]} onPress={sendEmergencyAlert}>
-            <Text style={styles.iconButtonText}>⚠️ SOS</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconButton, { backgroundColor: '#FF9800' }]} onPress={() => setChatVisible(true)}>
-            <Text style={styles.iconButtonText}>💬 CHAT</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* CHAT MODAL */}
-        <Modal visible={chatVisible} animationType="slide" presentationStyle="pageSheet">
-          <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: Platform.OS === 'android' ? 40 : 20 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderColor: '#eee' }}>
-              <TouchableOpacity onPress={() => setChatVisible(false)} style={{ padding: 5 }}>
-                <Text style={{ fontSize: 20 }}>⬇️ CLOSE</Text>
-              </TouchableOpacity>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', marginLeft: 20, flex: 1 }}>Secret Chat ({roomCode})</Text>
-            </View>
-            <GiftedChat
-              messages={messages}
-              onSend={messages => onSend(messages)}
-              user={{
-                _id: user?.uid || 1,
-                name: 'Agent',
-                avatar: 'https://cdn-icons-png.flaticon.com/512/149/149071.png'
-              }}
-            />
-            {Platform.OS === 'android' && <KeyboardAvoidingView behavior="padding" />}
-          </View>
-        </Modal>
-        <Text style={{ textAlign: 'center', marginTop: 10, color: '#888', fontSize: 10 }}>
-          Background Tracking Active 🟢
-        </Text>
-      </View>
+      <ChatModal
+        visible={chatVisible}
+        onClose={() => setChatVisible(false)}
+        roomCode={roomCode}
+      />
     </View>
   );
 }
@@ -405,7 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 30,
-    backgroundColor: '#F5F7FA', // Soft gray-blue background
+    backgroundColor: '#F5F7FA',
   },
   loginTitle: {
     fontSize: 36,
@@ -446,28 +224,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2D3748'
   },
-  roleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 30,
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2
-  },
-  roleText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#4A5568'
-  },
   connectButton: {
-    backgroundColor: '#3182CE', // Production Blue
+    backgroundColor: '#3182CE',
     paddingVertical: 18,
     borderRadius: 16,
     width: '100%',
@@ -484,72 +242,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: 0.5
   },
-  ipText: { marginTop: 30, color: '#CBD5E0', fontSize: 11, fontWeight: '600' },
 
-  // === MAP CONTROLS (DOCK) ===
-  controlPanel: {
-    position: 'absolute',
-    bottom: 40,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(255,255,255,0.95)', // Glass effect
-    padding: 25,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)'
-  },
-  roomBadge: {
-    position: 'absolute',
-    top: -12,
-    backgroundColor: '#2D3748',
-    color: 'white',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    fontWeight: '700',
-    fontSize: 12,
-    overflow: 'hidden',
-    letterSpacing: 0.5,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  pingButton: {
-    backgroundColor: '#48BB78', // Success Green
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    shadowColor: '#48BB78',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3
-  },
-  pingButtonText: {
-    color: 'white',
-    fontWeight: '700',
-    fontSize: 15,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8
-  },
-  listenMode: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
-    backgroundColor: '#F0FFF4',
-    borderRadius: 12,
-    width: '100%',
-    marginBottom: 10
-  },
-  // === NEW STYLES ===
+  // TOAST
   toastContainer: {
     position: 'absolute',
     top: 50,
@@ -571,51 +265,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.5
   },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 15,
-    width: '100%',
-    justifyContent: 'space-between'
-  },
-  iconButton: {
-    flex: 1,
-    backgroundColor: '#48BB78',
-    paddingVertical: 15,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3
-  },
-  iconButtonText: {
-    color: 'white',
-    fontWeight: '800',
-    fontSize: 14,
-    letterSpacing: 1
-  },
-  targetContainer: {
-    width: '100%',
-    alignItems: 'center',
-    gap: 10
-  },
-  pulsingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#48BB78',
-    shadowColor: '#48BB78',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 5
-  },
-  // MARKER STYLES
-  markerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+  // MARKER
+  markerContainer: { alignItems: 'center', justifyContent: 'center' },
   markerCircle: {
     width: 40,
     height: 40,
@@ -624,16 +276,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#48BB78', // WhatsApp Green
+    borderColor: '#48BB78',
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  markerText: {
-    fontSize: 20,
-  },
+  markerText: { fontSize: 20 },
   markerArrow: {
     width: 0,
     height: 0,
