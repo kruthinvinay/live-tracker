@@ -62,10 +62,10 @@ export const ChatModal = ({ visible, onClose, roomCode }: ChatModalProps) => {
     }, [roomCode]);
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
             <View style={styles.container}>
                 {/* HEADER */}
-                <View style={styles.header}>
+                <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <Text style={styles.closeText}>✕</Text>
                     </TouchableOpacity>
@@ -82,30 +82,37 @@ export const ChatModal = ({ visible, onClose, roomCode }: ChatModalProps) => {
                 {loading ? (
                     <ActivityIndicator size="large" color="#000" style={{ marginTop: 20 }} />
                 ) : (
-                    <GiftedChat
-                        messages={messages}
-                        onSend={msgs => onSend(msgs)}
-                        user={{
-                            _id: user?.uid || 1,
-                            name: 'Agent',
-                        }}
-                        renderAvatar={null}
-                        renderBubble={props => (
-                            <Bubble
-                                {...props}
-                                wrapperStyle={{
-                                    right: { backgroundColor: '#3182CE' },
-                                    left: { backgroundColor: '#fff' }
-                                }}
-                                textStyle={{
-                                    right: { color: '#fff' },
-                                    left: { color: '#000' }
-                                }}
-                            />
-                        )}
-                    />
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                        style={{ flex: 1 }}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                    >
+                        <GiftedChat
+                            messages={messages}
+                            onSend={msgs => onSend(msgs)}
+                            user={{
+                                _id: user?.uid || 1,
+                                name: 'Agent',
+                            }}
+                            renderAvatar={null}
+                            alwaysShowSend
+                            scrollToBottom
+                            renderBubble={props => (
+                                <Bubble
+                                    {...props}
+                                    wrapperStyle={{
+                                        right: { backgroundColor: '#3182CE' },
+                                        left: { backgroundColor: '#fff' }
+                                    }}
+                                    textStyle={{
+                                        right: { color: '#fff' },
+                                        left: { color: '#000' }
+                                    }}
+                                />
+                            )}
+                        />
+                    </KeyboardAvoidingView>
                 )}
-                {Platform.OS === 'android' && <KeyboardAvoidingView behavior="padding" />}
             </View>
         </Modal>
     );
