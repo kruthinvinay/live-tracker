@@ -1,5 +1,3 @@
-
-// @ts-nocheck
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
@@ -44,6 +42,7 @@ export default function HomeScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [roomCode, setRoomCode] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [userName, setUserName] = useState('');
   const [chatVisible, setChatVisible] = useState(false);
   const mapRef = useRef<MapView>(null);
 
@@ -85,6 +84,14 @@ export default function HomeScreen() {
   }, []);
 
   const handleConnect = () => {
+    if (!userName.trim()) {
+      showToast("Please enter your name", "error");
+      return;
+    }
+    if (!roomCode.trim()) {
+      showToast("Please enter a room code", "error");
+      return;
+    }
     connect(roomCode);
   };
 
@@ -97,6 +104,17 @@ export default function HomeScreen() {
           <StatusBar style="dark" />
           <Text style={styles.loginTitle}>Spy Glass 🛰️</Text>
           <Text style={styles.loginSubtitle}>Real-time Remote Tracker</Text>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Your Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Kruthin"
+              value={userName}
+              onChangeText={setUserName}
+              autoCapitalize="words"
+            />
+          </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Room Code</Text>
@@ -118,6 +136,13 @@ export default function HomeScreen() {
               keyboardType="phone-pad"
             />
           </View>
+
+          <TouchableOpacity
+            style={styles.generateButton}
+            onPress={() => setRoomCode(Math.floor(100 + Math.random() * 900).toString())}
+          >
+            <Text style={styles.generateButtonText}>🎲 Generate Random Code</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.connectButton} onPress={handleConnect}>
             <Text style={styles.connectButtonText}>Connect to Satellite</Text>
@@ -168,6 +193,7 @@ export default function HomeScreen() {
         visible={chatVisible}
         onClose={() => setChatVisible(false)}
         roomCode={roomCode}
+        userName={userName}
       />
     </View>
   );
@@ -223,6 +249,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#2D3748'
+  },
+  generateButton: {
+    backgroundColor: '#E2E8F0',
+    paddingVertical: 12,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E0'
+  },
+  generateButtonText: {
+    color: '#4A5568',
+    fontWeight: '600',
+    fontSize: 14,
   },
   connectButton: {
     backgroundColor: '#3182CE',

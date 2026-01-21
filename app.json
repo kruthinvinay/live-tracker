@@ -1,55 +1,47 @@
 {
   "expo": {
-    "name": "live-tracker",
-    "slug": "live-tracker",
+    "name": "SpyGlass",
+    "slug": "spyglass-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "livetracker",
+    "scheme": "spyglass",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.spyglass.tracker",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to show where you are on the map."
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to show where you are on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to track you in the background."
       }
     },
     "android": {
+      "package": "com.spyglass.tracker",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ],
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "plugins": [
-      "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ]
+      "expo-router"
     ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a5528f73-5528-4e37-afc1-6c7de222f8a4"
+      }
     }
   }
 }

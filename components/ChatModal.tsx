@@ -1,24 +1,48 @@
-
+import { Ionicons } from '@expo/vector-icons';
 import { signInAnonymously } from 'firebase/auth';
-import { off, onValue, push, ref } from 'firebase/database';
+import { onValue, push, ref, set } from 'firebase/database';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Bubble, GiftedChat, IMessage } from 'react-native-gifted-chat';
+import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native';
+import { GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
 import { auth, db } from '../firebaseConfig';
+
+// Modular Components
+import { ChatBubble } from './Chat/ChatBubble';
+import { ChatHeader } from './Chat/ChatHeader';
+import { ChatKeyboardWrapper } from './Chat/ChatKeyboardWrapper';
 
 interface ChatModalProps {
     visible: boolean;
     onClose: () => void;
     roomCode: string;
+    userName: string;
 }
 
-export const ChatModal = ({ visible, onClose, roomCode }: ChatModalProps) => {
+const COLORS = {
+    bg: '#f1f5f9',
+    primary: '#6366f1',
+    inputBg: '#f3f4f6',
+    placeholder: '#9ca3af',
+};
+
+export const ChatModal = ({ visible, onClose, roomCode, userName }: ChatModalProps) => {
     const [messages, setMessages] = useState<IMessage[]>([]);
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    // Auth
+    const [partnerName, setPartnerName] = useState<string>("Secure Channel");
+    const [partnerTyping, setPartnerTyping] = useState(false);
+
+    // 1. Auth & Data
     useEffect(() => {
+        // If already signed in, use existing user
+        if (auth.currentUser) {
+            setUser(auth.currentUser);
+            setLoading(false);
+            return;
+        }
+
+        // Otherwise sign in anonymously
         signInAnonymously(auth).then((userCredential) => {
             setUser(userCredential.user);
             setLoading(false);
@@ -28,11 +52,11 @@ export const ChatModal = ({ visible, onClose, roomCode }: ChatModalProps) => {
         });
     }, []);
 
-    // Listen for Messages
     useEffect(() => {
-        if (!roomCode) return;
-        const chatRef = ref(db, `chats/${roomCode}`);
-        const unsubscribe = onValue(chatRef, (snapshot) => {
+        if (!roomCode || !user) return;
+
+        const chatRef = ref(db, `chats/${roomCode}/messages`);
+        const unsubscribeMsg = onValue(chatRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 const parsedMessages = Object.keys(data).map(key => ({
@@ -41,100 +65,173 @@ export const ChatModal = ({ visible, onClose, roomCode }: ChatModalProps) => {
                     createdAt: new Date(data[key].createdAt)
                 })).sort((a: IMessage, b: IMessage) => (b.createdAt as number) - (a.createdAt as number));
                 setMessages(parsedMessages);
+
+                const partnerMsg = parsedMessages.find((m: any) => m.user?._id !== user?.uid);
+                if (partnerMsg && partnerMsg.user?.name) {
+                    setPartnerName(partnerMsg.user.name);
+                }
             } else {
                 setMessages([]);
             }
         });
 
-        return () => off(chatRef);
-    }, [roomCode]);
+        const typingRef = ref(db, `chats/${roomCode}/typing`);
+        const unsubscribeTyping = onValue(typingRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const otherTyping = Object.keys(data).some(key => key !== user?.uid && data[key] === true);
+                setPartnerTyping(otherTyping);
+            } else {
+                setPartnerTyping(false);
+            }
+        });
+
+        return () => {
+            unsubscribeMsg();
+            unsubscribeTyping();
+            if (user) {
+                set(ref(db, `chats/${roomCode}/typing/${user.uid}`), false);
+            }
+        };
+    }, [roomCode, user]);
+
+    // 2. Handlers
+    const handleInputChanged = useCallback((text: string) => {
+        if (!roomCode || !user) return;
+        set(ref(db, `chats/${roomCode}/typing/${user.uid}`), text.length > 0);
+    }, [roomCode, user]);
 
     const onSend = useCallback((newMessages: IMessage[] = []) => {
         setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages));
         const { _id, createdAt, text, user: msgUser } = newMessages[0];
-        const chatRef = ref(db, `chats/${roomCode}`);
-        push(chatRef, {
+
+        push(ref(db, `chats/${roomCode}/messages`), {
             _id,
             createdAt: new Date().toISOString(),
             text,
             user: msgUser
         });
-    }, [roomCode]);
 
+        if (user) {
+            set(ref(db, `chats/${roomCode}/typing/${user.uid}`), false);
+        }
+    }, [roomCode, user]);
+
+    // 3. Render
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+        <Modal
+            visible={visible}
+            animationType="slide"
+            transparent={false}
+            presentationStyle="fullScreen"
+            statusBarTranslucent={true} // Allow modal to cover status bar area
+            onRequestClose={onClose}
+        >
             <View style={styles.container}>
-                {/* HEADER */}
-                <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
-                    <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                        <Text style={styles.closeText}>✕</Text>
-                    </TouchableOpacity>
-                    <View style={styles.headerTitle}>
-                        <Text style={styles.titleText}>SECURE CHANNEL</Text>
-                        <View style={styles.statusRow}>
-                            <View style={styles.statusDot} />
-                            <Text style={styles.statusText}>ENCRYPTED • {roomCode}</Text>
-                        </View>
-                    </View>
-                    <View style={{ width: 30 }} />
-                </View>
+                <ChatHeader
+                    onClose={onClose}
+                    partnerName={partnerName}
+                    partnerTyping={partnerTyping}
+                />
 
-                {loading ? (
-                    <ActivityIndicator size="large" color="#000" style={{ marginTop: 20 }} />
-                ) : (
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-                        style={{ flex: 1 }}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-                    >
+                <ChatKeyboardWrapper>
+                    {loading ? (
+                        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
+                    ) : (
                         <GiftedChat
                             messages={messages}
-                            onSend={msgs => onSend(msgs)}
+                            onSend={onSend}
                             user={{
                                 _id: user?.uid || 1,
-                                name: 'Agent',
+                                name: userName || 'Me',
                             }}
                             renderAvatar={null}
                             alwaysShowSend
                             scrollToBottom
-                            renderBubble={props => (
-                                <Bubble
+                            listViewProps={{
+                                style: { backgroundColor: COLORS.bg },
+                                keyboardDismissMode: 'interactive',
+                            }}
+
+                            // Bubbles
+                            renderBubble={props => <ChatBubble {...props} />}
+                            isTyping={partnerTyping}
+                            onInputTextChanged={handleInputChanged}
+
+                            // STABLE PROPS-BASED STYLING
+                            textInputStyle={{
+                                backgroundColor: COLORS.inputBg,
+                                borderRadius: 20,
+                                paddingTop: 10,
+                                paddingBottom: 10,
+                                paddingHorizontal: 12,
+                                marginRight: 10,
+                                color: '#000000', // Black Text
+                                fontSize: 15,
+                                lineHeight: 20,
+                                marginTop: 6,
+                                marginBottom: 6,
+                            }}
+                            textInputProps={{
+                                style: { color: '#000000' }
+                            }}
+                            minInputToolbarHeight={56}
+
+                            // Input Toolbar Overrides
+                            renderInputToolbar={props => (
+                                <InputToolbar
                                     {...props}
-                                    wrapperStyle={{
-                                        right: { backgroundColor: '#3182CE' },
-                                        left: { backgroundColor: '#fff' }
+                                    containerStyle={{
+                                        backgroundColor: 'white',
+                                        borderTopColor: '#f3f4f6',
+                                        borderTopWidth: 1,
+                                        paddingHorizontal: 8,
                                     }}
-                                    textStyle={{
-                                        right: { color: '#fff' },
-                                        left: { color: '#000' }
-                                    }}
+                                    primaryStyle={{ alignItems: 'center' }}
                                 />
                             )}
+
+                            // Send Button
+                            renderSend={props => (
+                                <View style={{ justifyContent: 'center', height: 56, marginRight: 4 }}>
+                                    {props.text && props.text.trim().length > 0 ? (
+                                        <Send {...props} containerStyle={{ justifyContent: 'center' }}>
+                                            <View style={{
+                                                backgroundColor: COLORS.primary,
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: 20,
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                            }}>
+                                                <Ionicons name="send" size={18} color="#fff" style={{ marginLeft: 3 }} />
+                                            </View>
+                                        </Send>
+                                    ) : (
+                                        <View style={{
+                                            backgroundColor: '#f3f4f6',
+                                            width: 40,
+                                            height: 40,
+                                            borderRadius: 20,
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                        }}>
+                                            <Ionicons name="send" size={18} color={COLORS.placeholder} style={{ marginLeft: 3 }} />
+                                        </View>
+                                    )}
+                                </View>
+                            )}
                         />
-                    </KeyboardAvoidingView>
-                )}
+                    )}
+                </ChatKeyboardWrapper>
             </View>
         </Modal>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5' },
-    header: {
-        paddingTop: Platform.OS === 'android' ? 40 : 20,
-        paddingBottom: 15,
-        paddingHorizontal: 15,
-        backgroundColor: '#263238',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        elevation: 5
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.bg,
     },
-    closeBtn: { padding: 5 },
-    closeText: { fontSize: 24, color: '#fff', fontWeight: 'bold' },
-    headerTitle: { alignItems: 'center' },
-    titleText: { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: 1 },
-    statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-    statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#00E676', marginRight: 4 },
-    statusText: { fontSize: 10, color: '#B0BEC5' }
 });

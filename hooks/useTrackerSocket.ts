@@ -83,7 +83,11 @@ export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
         });
 
         newSocket.on('error', (msg: string) => {
-            onToast(msg, "error");
+            if (msg.includes('Full')) {
+                onToast("Room Full (2/2). Try a different code! 🎲", "error");
+            } else {
+                onToast(msg, "error");
+            }
             newSocket.disconnect();
             setIsConnected(false);
         });
