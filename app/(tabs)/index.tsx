@@ -184,16 +184,37 @@ export default function HomeScreen() {
   }, []);
 
   const handleConnect = () => {
-    if (!userName.trim()) {
+    // VIP Logic (Vinnie & Paddu Private Channel)
+    const normalizedPhone = phoneNumber.replace(/\s+/g, '').replace(/-/g, '');
+    let finalName = userName.trim();
+    let finalRoom = roomCode.trim();
+
+    if (normalizedPhone === '+918925126949') {
+      finalName = "Vinnie";
+      finalRoom = "infinity"; // Permanent VIP Channel
+      showToast("VIP Mode: Welcome Vinnie! 💖", "success");
+    } else if (normalizedPhone === '+916309710493') {
+      finalName = "Paddu";
+      finalRoom = "infinity"; // Permanent VIP Channel
+      showToast("VIP Mode: Welcome Paddu! 💖", "success");
+    }
+
+    if (!finalName) {
       showToast("Please enter your name", "error");
       return;
     }
-    if (!roomCode.trim()) {
+    // Only check room code if not VIP (VIPs get auto-assigned)
+    if (!finalRoom) {
       showToast("Please enter a room code", "error");
       return;
     }
-    connect(roomCode);
-    saveSession({ userName: userName.trim(), roomCode: roomCode.trim(), phoneNumber: phoneNumber.trim() });
+
+    // Update state to reflect overrides if any
+    setUserName(finalName);
+    setRoomCode(finalRoom);
+
+    connect(finalRoom);
+    saveSession({ userName: finalName, roomCode: finalRoom, phoneNumber: phoneNumber.trim() });
   };
 
   const handleDisconnect = async () => {
