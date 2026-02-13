@@ -264,6 +264,9 @@ export default function HomeScreen() {
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              importantForAutofill="yes"
             />
           </View>
 
