@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
+import { signInAnonymously } from 'firebase/auth';
 import { onValue, ref } from 'firebase/database';
 import { ChatModal } from '../../components/ChatModal';
 import { ControlDock } from '../../components/ControlDock';
-import { db } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 import { clearSession, getDeviceId, loadSession, saveSession } from '../../hooks/sessionStorage';
 import { sendChatNotification, useNotificationSetup } from '../../hooks/useNotifications';
 import { ToastType, useTrackerSocket } from '../../hooks/useTrackerSocket';
@@ -73,8 +74,14 @@ export default function HomeScreen() {
     let lastMessageCount = 0;
     let isFirstLoad = true;
 
-    const getMyDeviceId = async () => {
+    const setup = async () => {
       const myId = await getDeviceId();
+
+      // Ensure Firebase is authenticated before listening
+      if (!auth.currentUser) {
+        try { await signInAnonymously(auth); } catch (e) { console.error('BG auth failed:', e); return; }
+      }
+
       const chatRef = ref(db, `chats/${roomCode}/messages`);
 
       const unsubscribe = onValue(chatRef, (snapshot) => {
@@ -114,7 +121,7 @@ export default function HomeScreen() {
     };
 
     let cleanup: (() => void) | undefined;
-    getMyDeviceId().then(unsub => { cleanup = unsub; });
+    setup().then(unsub => { cleanup = unsub; });
 
     return () => {
       if (cleanup) cleanup();
