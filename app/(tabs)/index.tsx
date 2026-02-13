@@ -6,6 +6,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import { ChatModal } from '../../components/ChatModal';
 import { ControlDock } from '../../components/ControlDock';
+import { clearSession, loadSession, saveSession } from '../../hooks/sessionStorage';
 import { ToastType, useTrackerSocket } from '../../hooks/useTrackerSocket';
 
 // === CUSTOM TOAST COMPONENT ===
@@ -44,6 +45,7 @@ export default function HomeScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [userName, setUserName] = useState('');
   const [chatVisible, setChatVisible] = useState(false);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const mapRef = useRef<MapView>(null);
 
   // Toast State
@@ -54,9 +56,29 @@ export default function HomeScreen() {
   };
 
   // HOOK: Tracker Socket Logic
-  const { isConnected, friendLocation, connect, requestFriendLocation, sendEmergencyAlert } = useTrackerSocket({
+  const { isConnected, friendLocation, connect, disconnect, requestFriendLocation, sendEmergencyAlert } = useTrackerSocket({
     onToast: showToast
   });
+
+  // Load saved session on mount
+  useEffect(() => {
+    (async () => {
+      const session = await loadSession();
+      if (session) {
+        setUserName(session.userName);
+        setRoomCode(session.roomCode);
+        setPhoneNumber(session.phoneNumber);
+      }
+      setSessionLoaded(true);
+    })();
+  }, []);
+
+  // Auto-connect once session is loaded and we have saved data
+  useEffect(() => {
+    if (sessionLoaded && userName && roomCode && !isConnected) {
+      connect(roomCode);
+    }
+  }, [sessionLoaded]);
 
   // Effect: Animate Map when Friend Moves
   useEffect(() => {
@@ -93,6 +115,15 @@ export default function HomeScreen() {
       return;
     }
     connect(roomCode);
+    saveSession({ userName: userName.trim(), roomCode: roomCode.trim(), phoneNumber: phoneNumber.trim() });
+  };
+
+  const handleDisconnect = async () => {
+    await clearSession();
+    disconnect();
+    setUserName('');
+    setRoomCode('');
+    setPhoneNumber('');
   };
 
   // RENDER: Login Screen
@@ -158,6 +189,11 @@ export default function HomeScreen() {
       <Toast message={toast.message} visible={toast.visible} type={toast.type} />
       <StatusBar style="dark" backgroundColor="transparent" translucent />
 
+      {/* Disconnect Button */}
+      <TouchableOpacity style={styles.disconnectButton} onPress={handleDisconnect}>
+        <Text style={styles.disconnectText}>✕</Text>
+      </TouchableOpacity>
+
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
@@ -202,6 +238,25 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { width: '100%', height: '100%' },
+
+  // Disconnect Button
+  disconnectButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  disconnectText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
 
   // === PREMIUM LOGIN SCREEN ===
   loginContainer: {

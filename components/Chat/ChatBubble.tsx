@@ -10,6 +10,7 @@ const COLORS = {
     textRight: '#ffffff',
     timestampLeft: '#9ca3af',
     timestampRight: '#e0e7ff',
+    senderName: '#6366f1',
 };
 
 export const ChatBubble = (props: BubbleProps<IMessage>) => {
@@ -23,6 +24,17 @@ export const ChatBubble = (props: BubbleProps<IMessage>) => {
             textStyle={{
                 right: styles.textRight,
                 left: styles.textLeft,
+            }}
+            renderUsername={() => {
+                // Only show sender name on left (partner) bubbles
+                if (props.position === 'left' && props.currentMessage?.user?.name) {
+                    return (
+                        <Text style={styles.senderName}>
+                            {props.currentMessage.user.name}
+                        </Text>
+                    );
+                }
+                return null;
             }}
             renderTime={(timeProps) => (
                 <View style={styles.timeContainer}>
@@ -69,6 +81,14 @@ const styles = StyleSheet.create({
         fontSize: 14.5,
         lineHeight: 20,
     },
+    senderName: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: COLORS.senderName,
+        marginLeft: 10,
+        marginTop: 4,
+        marginBottom: 2,
+    },
     timeContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -81,3 +101,4 @@ const styles = StyleSheet.create({
         marginRight: 4,
     },
 });
+

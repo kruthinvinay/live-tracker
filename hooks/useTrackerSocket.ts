@@ -142,11 +142,26 @@ export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
         onToast("🚨 SOS Distress Signal Sent!", "error");
     }, [socket, onToast]);
 
+    const disconnect = useCallback(async () => {
+        if (socket) {
+            socket.disconnect();
+            setSocket(null);
+        }
+        setIsConnected(false);
+        setFriendLocation(null);
+        // Stop background tracking
+        const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => false);
+        if (isTracking) {
+            await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+        }
+    }, [socket]);
+
     return {
         socket,
         isConnected,
         friendLocation,
         connect,
+        disconnect,
         requestFriendLocation,
         sendEmergencyAlert
     };

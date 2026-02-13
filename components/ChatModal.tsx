@@ -155,6 +155,7 @@ export const ChatModal = ({ visible, onClose, roomCode, userName }: ChatModalPro
 
                             // Bubbles
                             renderBubble={props => <ChatBubble {...props} />}
+                            renderUsernameOnMessage={true}
                             isTyping={partnerTyping}
                             onInputTextChanged={handleInputChanged}
 
