@@ -32,10 +32,21 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION"
-      ]
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyC16ozJ_Td-VblgpI9uQhxXQ0RZyIpEQb4"
+        }
+      }
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow SpyGlass to track you in the background so your partner can find you even when the app is closed."
+        }
+      ]
     ],
     "extra": {
       "router": {},
