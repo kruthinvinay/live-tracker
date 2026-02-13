@@ -31,7 +31,9 @@ export const ChatHeader = ({ onClose, partnerName, partnerTyping }: ChatHeaderPr
                 </View>
                 <View style={styles.headerTextContainer}>
                     <Text style={styles.headerTitle}>{partnerName}</Text>
-                    <Text style={[styles.headerStatus, { color: partnerTyping ? COLORS.primary : COLORS.green }]}>
+                    <Text style={[styles.headerStatus, {
+                        color: partnerTyping ? COLORS.primary : (partnerName === "Secure Channel" ? '#9ca3af' : COLORS.green)
+                    }]}>
                         {partnerTyping ? "typing..." : (partnerName === "Secure Channel" ? "Waiting..." : "Online")}
                     </Text>
                 </View>

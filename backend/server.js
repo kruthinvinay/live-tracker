@@ -41,8 +41,8 @@ io.on('connection', (socket) => {
     // 2. The Tracker requests location (Remote Wake Request)
     socket.on('request_location', (roomCode) => {
         console.log(`Location requested for room ${roomCode}`);
-        // Broadcast to everyone in room (specifically the target) to wake up
-        io.to(roomCode).emit('wake_up_and_send_location');
+        // Send only to the partner (exclude sender) so the pinger doesn't ping themselves
+        socket.to(roomCode).emit('wake_up_and_send_location');
     });
 
     // 3. The Target sends their location

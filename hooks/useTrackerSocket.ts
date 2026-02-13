@@ -19,12 +19,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         const loc = locations[0];
         if (loc) {
             console.log("Background Location:", loc.coords.latitude, loc.coords.longitude);
-            // Fresh socket for background execution
-            const bgSocket = io(SERVER_URL, { transports: ['websocket'] });
-            bgSocket.emit('bg_location_update', {
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude
-            });
+            // Location is tracked via foreground service; no additional socket needed here.
         }
     }
 });
