@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
+import { onValue, ref } from 'firebase/database';
 import { ChatModal } from '../../components/ChatModal';
 import { ControlDock } from '../../components/ControlDock';
-import { clearSession, loadSession, saveSession } from '../../hooks/sessionStorage';
+import { db } from '../../firebaseConfig';
+import { clearSession, getDeviceId, loadSession, saveSession } from '../../hooks/sessionStorage';
+import { sendChatNotification, useNotificationSetup } from '../../hooks/useNotifications';
 import { ToastType, useTrackerSocket } from '../../hooks/useTrackerSocket';
 
 // === CUSTOM TOAST COMPONENT ===
@@ -55,10 +58,68 @@ export default function HomeScreen() {
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3000);
   };
 
+  // HOOK: Notification setup
+  useNotificationSetup();
+
   // HOOK: Tracker Socket Logic
   const { isConnected, isPartnerOnline, friendLocation, connect, disconnect, requestFriendLocation, sendEmergencyAlert } = useTrackerSocket({
     onToast: showToast
   });
+
+  // Background chat notification listener (fires when chat modal is closed)
+  useEffect(() => {
+    if (!isConnected || !roomCode || chatVisible) return;
+
+    let lastMessageCount = 0;
+    let isFirstLoad = true;
+
+    const getMyDeviceId = async () => {
+      const myId = await getDeviceId();
+      const chatRef = ref(db, `chats/${roomCode}/messages`);
+
+      const unsubscribe = onValue(chatRef, (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
+
+        const allMessages = Object.values(data) as any[];
+        const currentCount = allMessages.length;
+
+        // Skip the initial load (don't notify for existing messages)
+        if (isFirstLoad) {
+          lastMessageCount = currentCount;
+          isFirstLoad = false;
+          return;
+        }
+
+        // Only notify if there are NEW messages
+        if (currentCount > lastMessageCount) {
+          // Get the newest message
+          const sorted = allMessages.sort((a: any, b: any) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          const newest = sorted[0];
+
+          // Only notify if the newest message is from the partner
+          if (newest?.user?._id !== myId) {
+            sendChatNotification(
+              newest?.user?.name || 'Partner',
+              newest?.text || 'New message'
+            );
+          }
+        }
+        lastMessageCount = currentCount;
+      });
+
+      return unsubscribe;
+    };
+
+    let cleanup: (() => void) | undefined;
+    getMyDeviceId().then(unsub => { cleanup = unsub; });
+
+    return () => {
+      if (cleanup) cleanup();
+    };
+  }, [isConnected, roomCode, chatVisible]);
 
   // Load saved session on mount
   useEffect(() => {

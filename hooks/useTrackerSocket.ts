@@ -4,6 +4,7 @@ import * as TaskManager from 'expo-task-manager';
 import { useCallback, useState } from 'react';
 import { Alert, Linking } from 'react-native';
 import { io, Socket } from 'socket.io-client';
+import { sendSOSNotification } from './useNotifications';
 
 const SERVER_URL = 'https://spyglass-server-h7pe.onrender.com';
 const LOCATION_TASK_NAME = 'LOCATION_TRACKING';
@@ -119,6 +120,9 @@ export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
         });
 
         newSocket.on('receive_alert', ({ location, phoneNumber }) => {
+            // Fire device notification
+            sendSOSNotification();
+
             Alert.alert(
                 "🚨 EMERGENCY 🚨",
                 `Friend needs help!\nLat: ${location.latitude}\nLng: ${location.longitude}`,
