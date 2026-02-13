@@ -1,16 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { signInAnonymously } from 'firebase/auth';
 import { onValue, push, ref, set } from 'firebase/database';
+import { getDownloadURL, ref as storageRef, uploadBytesResumable } from 'firebase/storage';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Dimensions, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
-import { auth, db } from '../firebaseConfig';
+import { auth, db, storage } from '../firebaseConfig';
 import { getDeviceId } from '../hooks/sessionStorage';
 
 // Modular Components
 import { ChatBubble } from './Chat/ChatBubble';
 import { ChatHeader } from './Chat/ChatHeader';
+import { ChatImageViewer } from './Chat/ChatImageViewer';
 import { ChatKeyboardWrapper } from './Chat/ChatKeyboardWrapper';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ChatModalProps {
     visible: boolean;
@@ -35,6 +40,9 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
 
     const [partnerName, setPartnerName] = useState<string>("Secure Channel");
     const [partnerTyping, setPartnerTyping] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [viewerImage, setViewerImage] = useState<string | null>(null);
 
     // 1. Auth & Device ID
     useEffect(() => {
@@ -110,19 +118,156 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
 
     const onSend = useCallback((newMessages: IMessage[] = []) => {
         setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages));
-        const { _id, createdAt, text, user: msgUser } = newMessages[0];
+        const { _id, createdAt, text, user: msgUser, image } = newMessages[0];
 
-        push(ref(db, `chats/${roomCode}/messages`), {
+        const messageData: any = {
             _id,
             createdAt: new Date().toISOString(),
-            text,
+            text: text || '',
             user: msgUser
-        });
+        };
+        if (image) {
+            messageData.image = image;
+        }
+
+        push(ref(db, `chats/${roomCode}/messages`), messageData);
 
         if (deviceId) {
             set(ref(db, `chats/${roomCode}/typing/${deviceId}`), false);
         }
     }, [roomCode, deviceId]);
+
+    // 2b. Image Upload
+    const uploadImage = async (uri: string) => {
+        try {
+            setUploading(true);
+            setUploadProgress(0);
+
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const filename = `chat_images/${roomCode}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+            const imageRef = storageRef(storage, filename);
+
+            const uploadTask = uploadBytesResumable(imageRef, blob);
+
+            return new Promise<string>((resolve, reject) => {
+                uploadTask.on('state_changed',
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        setUploadProgress(progress);
+                    },
+                    (error) => {
+                        console.error('Upload failed:', error);
+                        setUploading(false);
+                        reject(error);
+                    },
+                    async () => {
+                        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        setUploading(false);
+                        resolve(downloadURL);
+                    }
+                );
+            });
+        } catch (error) {
+            console.error('Upload error:', error);
+            setUploading(false);
+            throw error;
+        }
+    };
+
+    const pickImage = async (useCamera: boolean) => {
+        try {
+            const permResult = useCamera
+                ? await ImagePicker.requestCameraPermissionsAsync()
+                : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+            if (permResult.status !== 'granted') {
+                Alert.alert('Permission needed', `Please allow ${useCamera ? 'camera' : 'photo library'} access.`);
+                return;
+            }
+
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync({
+                    mediaTypes: ['images'],
+                    quality: 0.7,
+                    allowsEditing: true,
+                })
+                : await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ['images'],
+                    quality: 0.7,
+                    allowsEditing: true,
+                });
+
+            if (!result.canceled && result.assets[0]) {
+                const imageUri = result.assets[0].uri;
+                const downloadURL = await uploadImage(imageUri);
+
+                // Send as image message
+                const imageMessage: IMessage = {
+                    _id: Date.now().toString(),
+                    createdAt: new Date(),
+                    text: '',
+                    image: downloadURL,
+                    user: {
+                        _id: deviceId || 'unknown',
+                        name: userName || 'Me',
+                    },
+                };
+                onSend([imageMessage]);
+            }
+        } catch (error) {
+            console.error('Image pick error:', error);
+            Alert.alert('Error', 'Failed to send image. Please try again.');
+        }
+    };
+
+    const showAttachmentOptions = () => {
+        if (Platform.OS === 'ios') {
+            ActionSheetIOS.showActionSheetWithOptions(
+                {
+                    options: ['Cancel', '📷 Camera', '🖼️ Gallery'],
+                    cancelButtonIndex: 0,
+                },
+                (buttonIndex) => {
+                    if (buttonIndex === 1) pickImage(true);
+                    if (buttonIndex === 2) pickImage(false);
+                }
+            );
+        } else {
+            // Android: simple Alert as action sheet
+            Alert.alert(
+                'Send Image',
+                'Choose an option',
+                [
+                    { text: '📷 Camera', onPress: () => pickImage(true) },
+                    { text: '🖼️ Gallery', onPress: () => pickImage(false) },
+                    { text: 'Cancel', style: 'cancel' },
+                ]
+            );
+        }
+    };
+
+    // 2c. Custom Message Image Renderer (WhatsApp-style)
+    const renderMessageImage = (props: any) => {
+        const { currentMessage } = props;
+        return (
+            <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => setViewerImage(currentMessage.image)}
+            >
+                <Image
+                    source={{ uri: currentMessage.image }}
+                    style={{
+                        width: SCREEN_WIDTH * 0.6,
+                        height: SCREEN_WIDTH * 0.6,
+                        borderRadius: 13,
+                        margin: 3,
+                    }}
+                    resizeMode="cover"
+                />
+            </TouchableOpacity>
+        );
+    };
 
     // 3. Render
     return (
@@ -186,6 +331,9 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                             }}
                             minInputToolbarHeight={56}
 
+                            // Image message rendering
+                            renderMessageImage={renderMessageImage}
+
                             // Input Toolbar Overrides
                             renderInputToolbar={props => (
                                 <InputToolbar
@@ -198,6 +346,21 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                                     }}
                                     primaryStyle={{ alignItems: 'center' }}
                                 />
+                            )}
+
+                            // Actions (attachment button)
+                            renderActions={() => (
+                                <TouchableOpacity
+                                    style={{
+                                        justifyContent: 'center',
+                                        height: 56,
+                                        paddingLeft: 4,
+                                        paddingRight: 4,
+                                    }}
+                                    onPress={showAttachmentOptions}
+                                >
+                                    <Ionicons name="attach" size={24} color={COLORS.primary} />
+                                </TouchableOpacity>
                             )}
 
                             // Send Button
@@ -233,6 +396,26 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                         />
                     )}
                 </ChatKeyboardWrapper>
+
+                {/* Upload Progress */}
+                {uploading && (
+                    <View style={styles.uploadOverlay}>
+                        <View style={styles.uploadBox}>
+                            <ActivityIndicator size="large" color={COLORS.primary} />
+                            <Text style={styles.uploadText}>Sending image... {Math.round(uploadProgress)}%</Text>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+                            </View>
+                        </View>
+                    </View>
+                )}
+
+                {/* Fullscreen Image Viewer */}
+                <ChatImageViewer
+                    imageUri={viewerImage}
+                    visible={!!viewerImage}
+                    onClose={() => setViewerImage(null)}
+                />
             </View>
         </Modal>
     );
@@ -242,5 +425,41 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.bg,
+    },
+    uploadOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    uploadBox: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+        width: '70%',
+    },
+    uploadText: {
+        marginTop: 12,
+        fontSize: 15,
+        color: '#333',
+        fontWeight: '500',
+    },
+    progressBar: {
+        width: '100%',
+        height: 4,
+        backgroundColor: '#e5e7eb',
+        borderRadius: 2,
+        marginTop: 12,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: COLORS.primary,
+        borderRadius: 2,
     },
 });
