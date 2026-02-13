@@ -1,13 +1,15 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getDatabase } from 'firebase/database'; // Switch to RTDB
-import { getStorage } from 'firebase/storage'; // Images/Videos
+// @ts-ignore
+import { getReactNativePersistence, initializeAuth } from 'firebase/auth';
+import { getDatabase } from 'firebase/database';
+import { getStorage } from 'firebase/storage';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
     apiKey: "AIzaSyDMAcnLpl26qeapIZwcg5l0ZTkoPLmwbjE",
     authDomain: "spyglass-451db.firebaseapp.com",
-    databaseURL: "https://spyglass-451db-default-rtdb.firebaseio.com", // Added RTDB URL
+    databaseURL: "https://spyglass-451db-default-rtdb.firebaseio.com",
     projectId: "spyglass-451db",
     storageBucket: "spyglass-451db.firebasestorage.app",
     messagingSenderId: "3480665648",
@@ -18,7 +20,10 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Export services
-export const auth = getAuth(app);
-export const db = getDatabase(app); // RTDB Instance
+// Initialize Auth with persistence (AsyncStorage)
+export const auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+});
+
+export const db = getDatabase(app);
 export const storage = getStorage(app);

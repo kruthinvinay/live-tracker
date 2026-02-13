@@ -190,12 +190,12 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                 ? await ImagePicker.launchCameraAsync({
                     mediaTypes: ['images'],
                     quality: 0.7,
-                    allowsEditing: true,
+                    allowsEditing: false, // Fix: Disable crop screen
                 })
                 : await ImagePicker.launchImageLibraryAsync({
                     mediaTypes: ['images'],
                     quality: 0.7,
-                    allowsEditing: true,
+                    allowsEditing: false, // Fix: Disable crop screen
                 });
 
             if (!result.canceled && result.assets[0]) {
