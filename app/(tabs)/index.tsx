@@ -56,7 +56,7 @@ export default function HomeScreen() {
   };
 
   // HOOK: Tracker Socket Logic
-  const { isConnected, friendLocation, connect, disconnect, requestFriendLocation, sendEmergencyAlert } = useTrackerSocket({
+  const { isConnected, isPartnerOnline, friendLocation, connect, disconnect, requestFriendLocation, sendEmergencyAlert } = useTrackerSocket({
     onToast: showToast
   });
 
@@ -230,6 +230,7 @@ export default function HomeScreen() {
         onClose={() => setChatVisible(false)}
         roomCode={roomCode}
         userName={userName}
+        isPartnerOnline={isPartnerOnline}
       />
     </View>
   );

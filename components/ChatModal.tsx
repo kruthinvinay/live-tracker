@@ -16,6 +16,7 @@ interface ChatModalProps {
     onClose: () => void;
     roomCode: string;
     userName: string;
+    isPartnerOnline: boolean;
 }
 
 const COLORS = {
@@ -25,7 +26,7 @@ const COLORS = {
     placeholder: '#9ca3af',
 };
 
-export const ChatModal = ({ visible, onClose, roomCode, userName }: ChatModalProps) => {
+export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnline }: ChatModalProps) => {
     const [messages, setMessages] = useState<IMessage[]>([]);
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -132,6 +133,7 @@ export const ChatModal = ({ visible, onClose, roomCode, userName }: ChatModalPro
                     onClose={onClose}
                     partnerName={partnerName}
                     partnerTyping={partnerTyping}
+                    isPartnerOnline={isPartnerOnline}
                 />
 
                 <ChatKeyboardWrapper>

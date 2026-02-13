@@ -11,8 +11,8 @@ const io = new Server(server, {
     }
 });
 
-// Store active users: { "socketId": { role: "tracker/target", id: "userA" } }
-let users = {};
+// Track which room each socket is in
+let socketRooms = {};
 
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
@@ -29,6 +29,7 @@ io.on('connection', (socket) => {
         }
 
         socket.join(roomCode);
+        socketRooms[socket.id] = roomCode;
         console.log(`User ${socket.id} joined room: ${roomCode} (${numClients + 1}/2)`);
 
         // Confirm to Self
@@ -66,6 +67,11 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
+        const roomCode = socketRooms[socket.id];
+        if (roomCode) {
+            socket.to(roomCode).emit('partner_disconnected');
+            delete socketRooms[socket.id];
+        }
     });
 });
 

@@ -33,6 +33,7 @@ interface UseTrackerSocketProps {
 export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
+    const [isPartnerOnline, setIsPartnerOnline] = useState(false);
     const [friendLocation, setFriendLocation] = useState<{ latitude: number, longitude: number } | null>(null);
 
     const connect = useCallback((roomCode: string) => {
@@ -89,7 +90,13 @@ export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
 
         newSocket.on('partner_connected', () => {
             setIsConnected(true);
+            setIsPartnerOnline(true);
             onToast("Partner Connected! 🟢", "success");
+        });
+
+        newSocket.on('partner_disconnected', () => {
+            setIsPartnerOnline(false);
+            onToast("Partner Disconnected 🔴", "info");
         });
 
         newSocket.on('update_map', (coords: { latitude: number; longitude: number }) => {
@@ -148,6 +155,7 @@ export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
             setSocket(null);
         }
         setIsConnected(false);
+        setIsPartnerOnline(false);
         setFriendLocation(null);
         // Stop background tracking
         const isTracking = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => false);
@@ -159,6 +167,7 @@ export const useTrackerSocket = ({ onToast }: UseTrackerSocketProps) => {
     return {
         socket,
         isConnected,
+        isPartnerOnline,
         friendLocation,
         connect,
         disconnect,

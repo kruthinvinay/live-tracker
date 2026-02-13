@@ -6,6 +6,7 @@ interface ChatHeaderProps {
     onClose: () => void;
     partnerName: string;
     partnerTyping: boolean;
+    isPartnerOnline: boolean;
 }
 
 const COLORS = {
@@ -14,7 +15,19 @@ const COLORS = {
     text: '#1f2937',
 };
 
-export const ChatHeader = ({ onClose, partnerName, partnerTyping }: ChatHeaderProps) => {
+export const ChatHeader = ({ onClose, partnerName, partnerTyping, isPartnerOnline }: ChatHeaderProps) => {
+    const getStatusText = () => {
+        if (partnerTyping) return "typing...";
+        if (isPartnerOnline) return "Online";
+        return "Offline";
+    };
+
+    const getStatusColor = () => {
+        if (partnerTyping) return COLORS.primary;
+        if (isPartnerOnline) return COLORS.green;
+        return '#9ca3af';
+    };
+
     return (
         <View style={styles.header}>
             <TouchableOpacity onPress={onClose} style={styles.backButton}>
@@ -26,15 +39,12 @@ export const ChatHeader = ({ onClose, partnerName, partnerTyping }: ChatHeaderPr
                     <View style={styles.avatarUser}>
                         <Ionicons name="person" size={20} color={COLORS.primary} />
                     </View>
-                    {/* Green Dot if Partner Name is Known */}
-                    {partnerName !== "Secure Channel" && <View style={styles.onlineDot} />}
+                    {isPartnerOnline && <View style={styles.onlineDot} />}
                 </View>
                 <View style={styles.headerTextContainer}>
                     <Text style={styles.headerTitle}>{partnerName}</Text>
-                    <Text style={[styles.headerStatus, {
-                        color: partnerTyping ? COLORS.primary : (partnerName === "Secure Channel" ? '#9ca3af' : COLORS.green)
-                    }]}>
-                        {partnerTyping ? "typing..." : (partnerName === "Secure Channel" ? "Waiting..." : "Online")}
+                    <Text style={[styles.headerStatus, { color: getStatusColor() }]}>
+                        {getStatusText()}
                     </Text>
                 </View>
             </View>

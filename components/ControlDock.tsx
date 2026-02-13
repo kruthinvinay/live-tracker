@@ -35,7 +35,7 @@ export const ControlDock = ({ roomCode, onPing, onSos, onChat }: ControlDockProp
 const styles = StyleSheet.create({
     controlPanel: {
         position: 'absolute',
-        bottom: 40,
+        bottom: 55,
         left: 20,
         right: 20,
         backgroundColor: 'rgba(255,255,255,0.95)',
