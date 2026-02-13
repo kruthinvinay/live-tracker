@@ -353,7 +353,8 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                                 />
                             )}
 
-                            // Actions (attachment button)
+                            // Actions (attachment button) - Temporarily disabled for APK build 1.0
+                            /*
                             renderActions={() => (
                                 <TouchableOpacity
                                     style={{
@@ -367,6 +368,7 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                                     <Ionicons name="attach" size={24} color={COLORS.primary} />
                                 </TouchableOpacity>
                             )}
+                            */
 
                             // Send Button
                             renderSend={props => (
