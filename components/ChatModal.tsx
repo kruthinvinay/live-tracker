@@ -143,8 +143,21 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
             setUploading(true);
             setUploadProgress(0);
 
-            const response = await fetch(uri);
-            const blob = await response.blob();
+            // Fetch blob using XMLHttpRequest (more reliable on Android)
+            const blob = await new Promise<Blob>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.onload = function () {
+                    resolve(xhr.response);
+                };
+                xhr.onerror = function (e) {
+                    console.error('XHR Error:', e);
+                    reject(new TypeError('Network request failed'));
+                };
+                xhr.responseType = 'blob';
+                xhr.open('GET', uri, true);
+                xhr.send(null);
+            });
+
             const filename = `chat_images/${roomCode}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
             const imageRef = storageRef(storage, filename);
 
