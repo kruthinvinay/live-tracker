@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
+// @ts-ignore
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { signInAnonymously } from 'firebase/auth';
 import { onValue, push, ref, set } from 'firebase/database';
