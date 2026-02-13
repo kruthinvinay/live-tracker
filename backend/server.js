@@ -57,8 +57,14 @@ io.on('connection', (socket) => {
         // Confirm to Self
         socket.emit('join_success');
 
-        // Notify others a partner connected
+        // Notify existing members that a partner connected
         socket.to(roomCode).emit('partner_connected');
+
+        // If there was already someone in the room, tell the joiner too
+        if (numClients >= 1) {
+            socket.emit('partner_connected');
+        }
+
     });
 
     // 2. The Tracker requests location (Remote Wake Request)
