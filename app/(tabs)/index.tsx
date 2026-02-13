@@ -102,6 +102,16 @@ export default function HomeScreen() {
       }
       let loc = await Location.getCurrentPositionAsync({});
       setLocation(loc);
+
+      // Animate map to actual location once GPS locks in
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
     })();
   }, []);
 
