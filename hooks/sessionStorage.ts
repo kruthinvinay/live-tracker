@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SESSION_KEY = 'SPYGLASS_SESSION';
+const DEVICE_ID_KEY = 'SPYGLASS_DEVICE_ID';
 
 interface SessionData {
     userName: string;
@@ -33,3 +34,19 @@ export const clearSession = async (): Promise<void> => {
         console.error('Failed to clear session:', e);
     }
 };
+
+// Generate a unique, persistent device ID (never changes across restarts)
+export const getDeviceId = async (): Promise<string> => {
+    try {
+        let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+        if (!id) {
+            id = 'device_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+            await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+        }
+        return id;
+    } catch (e) {
+        console.error('Failed to get device ID:', e);
+        return 'fallback_' + Date.now();
+    }
+};
+

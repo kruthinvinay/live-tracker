@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, View } from 'react-native';
 import { GiftedChat, IMessage, InputToolbar, Send } from 'react-native-gifted-chat';
 import { auth, db } from '../firebaseConfig';
+import { getDeviceId } from '../hooks/sessionStorage';
 
 // Modular Components
 import { ChatBubble } from './Chat/ChatBubble';
@@ -29,32 +30,37 @@ const COLORS = {
 export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnline }: ChatModalProps) => {
     const [messages, setMessages] = useState<IMessage[]>([]);
     const [user, setUser] = useState<any>(null);
+    const [deviceId, setDeviceId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     const [partnerName, setPartnerName] = useState<string>("Secure Channel");
     const [partnerTyping, setPartnerTyping] = useState(false);
 
-    // 1. Auth & Data
+    // 1. Auth & Device ID
     useEffect(() => {
-        // If already signed in, use existing user
-        if (auth.currentUser) {
-            setUser(auth.currentUser);
-            setLoading(false);
-            return;
-        }
+        const init = async () => {
+            // Get persistent device ID
+            const id = await getDeviceId();
+            setDeviceId(id);
 
-        // Otherwise sign in anonymously
-        signInAnonymously(auth).then((userCredential) => {
-            setUser(userCredential.user);
+            // Firebase auth (for DB access)
+            if (auth.currentUser) {
+                setUser(auth.currentUser);
+            } else {
+                try {
+                    const cred = await signInAnonymously(auth);
+                    setUser(cred.user);
+                } catch (error) {
+                    console.error("Chat Login Error:", error);
+                }
+            }
             setLoading(false);
-        }).catch((error) => {
-            console.error("Chat Login Error:", error);
-            setLoading(false);
-        });
+        };
+        init();
     }, []);
 
     useEffect(() => {
-        if (!roomCode || !user) return;
+        if (!roomCode || !user || !deviceId) return;
 
         const chatRef = ref(db, `chats/${roomCode}/messages`);
         const unsubscribeMsg = onValue(chatRef, (snapshot) => {
@@ -67,7 +73,7 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                 })).sort((a: IMessage, b: IMessage) => (b.createdAt as number) - (a.createdAt as number));
                 setMessages(parsedMessages);
 
-                const partnerMsg = parsedMessages.find((m: any) => m.user?._id !== user?.uid);
+                const partnerMsg = parsedMessages.find((m: any) => m.user?._id !== deviceId);
                 if (partnerMsg && partnerMsg.user?.name) {
                     setPartnerName(partnerMsg.user.name);
                 }
@@ -80,7 +86,7 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
         const unsubscribeTyping = onValue(typingRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
-                const otherTyping = Object.keys(data).some(key => key !== user?.uid && data[key] === true);
+                const otherTyping = Object.keys(data).some(key => key !== deviceId && data[key] === true);
                 setPartnerTyping(otherTyping);
             } else {
                 setPartnerTyping(false);
@@ -90,17 +96,17 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
         return () => {
             unsubscribeMsg();
             unsubscribeTyping();
-            if (user) {
-                set(ref(db, `chats/${roomCode}/typing/${user.uid}`), false);
+            if (deviceId) {
+                set(ref(db, `chats/${roomCode}/typing/${deviceId}`), false);
             }
         };
-    }, [roomCode, user]);
+    }, [roomCode, user, deviceId]);
 
     // 2. Handlers
     const handleInputChanged = useCallback((text: string) => {
-        if (!roomCode || !user) return;
-        set(ref(db, `chats/${roomCode}/typing/${user.uid}`), text.length > 0);
-    }, [roomCode, user]);
+        if (!roomCode || !deviceId) return;
+        set(ref(db, `chats/${roomCode}/typing/${deviceId}`), text.length > 0);
+    }, [roomCode, deviceId]);
 
     const onSend = useCallback((newMessages: IMessage[] = []) => {
         setMessages(previousMessages => GiftedChat.append(previousMessages, newMessages));
@@ -113,10 +119,10 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
             user: msgUser
         });
 
-        if (user) {
-            set(ref(db, `chats/${roomCode}/typing/${user.uid}`), false);
+        if (deviceId) {
+            set(ref(db, `chats/${roomCode}/typing/${deviceId}`), false);
         }
-    }, [roomCode, user]);
+    }, [roomCode, deviceId]);
 
     // 3. Render
     return (
@@ -144,7 +150,7 @@ export const ChatModal = ({ visible, onClose, roomCode, userName, isPartnerOnlin
                             messages={messages}
                             onSend={onSend}
                             user={{
-                                _id: user?.uid || 1,
+                                _id: deviceId || 'unknown',
                                 name: userName || 'Me',
                             }}
                             renderAvatar={null}
