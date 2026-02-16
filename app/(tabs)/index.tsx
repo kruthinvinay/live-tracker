@@ -2,7 +2,7 @@ import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { OpenStreetMap } from '../../components/OpenStreetMap';
 
 import { signInAnonymously } from 'firebase/auth';
 import { onValue, ref } from 'firebase/database';
@@ -50,7 +50,7 @@ export default function HomeScreen() {
   const [userName, setUserName] = useState('');
   const [chatVisible, setChatVisible] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const mapRef = useRef<MapView>(null);
+  // mapRef removed — OpenStreetMap manages its own view
 
   // Toast State
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' as ToastType });
@@ -148,17 +148,7 @@ export default function HomeScreen() {
     }
   }, [sessionLoaded]);
 
-  // Effect: Animate Map when Friend Moves
-  useEffect(() => {
-    if (friendLocation && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: friendLocation.latitude,
-        longitude: friendLocation.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 1000);
-    }
-  }, [friendLocation]);
+  // Effect: Friend location updates are handled by OpenStreetMap component directly
 
   // Initial Location
   useEffect(() => {
@@ -171,15 +161,7 @@ export default function HomeScreen() {
       let loc = await Location.getCurrentPositionAsync({});
       setLocation(loc);
 
-      // Animate map to actual location once GPS locks in
-      if (mapRef.current) {
-        mapRef.current.animateToRegion({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
-      }
+      // OpenStreetMap auto-centers on user location via props
     })();
   }, []);
 
@@ -296,29 +278,11 @@ export default function HomeScreen() {
         <Text style={styles.disconnectText}>✕</Text>
       </TouchableOpacity>
 
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
+      <OpenStreetMap
+        myLocation={location ? { latitude: location.coords.latitude, longitude: location.coords.longitude } : null}
+        friendLocation={friendLocation}
         style={styles.map}
-        initialRegion={{
-          latitude: location?.coords.latitude || 37.78825,
-          longitude: location?.coords.longitude || -122.4324,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-        showsUserLocation={true}
-      >
-        {friendLocation && (
-          <Marker coordinate={friendLocation} title="Partner">
-            <View style={styles.markerContainer}>
-              <View style={styles.markerCircle}>
-                <Text style={styles.markerText}>👤</Text>
-              </View>
-              <View style={styles.markerArrow} />
-            </View>
-          </Marker>
-        )}
-      </MapView>
+      />
 
       <ControlDock
         roomCode={roomCode}
