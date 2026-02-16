@@ -17,6 +17,23 @@ const io = new Server(server, {
 // Track which room each socket is in
 let socketRooms = {};
 
+// Health check
+app.get('/', (req, res) => {
+    const connectedCount = io.sockets.sockets.size;
+    res.json({ status: 'ok', connectedSockets: connectedCount, rooms: Object.keys(socketRooms).length });
+});
+
+// Admin: Force reset all rooms (disconnect all sockets)
+app.get('/reset', (req, res) => {
+    console.log('ADMIN RESET: Disconnecting all sockets...');
+    for (const [id, socket] of io.sockets.sockets) {
+        socket.disconnect(true);
+    }
+    socketRooms = {};
+    console.log('ADMIN RESET: All rooms cleared.');
+    res.json({ status: 'reset', message: 'All sockets disconnected, all rooms cleared.' });
+});
+
 // Helper: purge dead/ghost sockets from a room
 function purgeGhosts(roomCode) {
     const room = io.sockets.adapter.rooms.get(roomCode);
