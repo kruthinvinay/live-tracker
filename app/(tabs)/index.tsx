@@ -191,11 +191,11 @@ export default function HomeScreen() {
 
     if (normalizedPhone === '+918925126949') {
       finalName = "Vinnie";
-      finalRoom = "infinity"; // Permanent VIP Channel
+      if (!finalRoom) finalRoom = "infinity"; // Default VIP Channel (only if no room entered)
       showToast("VIP Mode: Welcome Vinnie! 💖", "success");
     } else if (normalizedPhone === '+916309710493') {
       finalName = "Paddu";
-      finalRoom = "infinity"; // Permanent VIP Channel
+      if (!finalRoom) finalRoom = "infinity"; // Default VIP Channel (only if no room entered)
       showToast("VIP Mode: Welcome Paddu! 💖", "success");
     }
 
